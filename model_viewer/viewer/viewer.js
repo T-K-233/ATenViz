@@ -1107,8 +1107,24 @@
     await rebuild(true);
   });
 
+  // A graph file is JSON or gzip-compressed JSON. raw.githubusercontent.com sends a .gz file as is.
+  async function readGraph(blob) {
+    const head = new Uint8Array(await blob.slice(0, 2).arrayBuffer());
+    const gzip = head[0] === 0x1f && head[1] === 0x8b;
+    return JSON.parse(await new Response(gzip ? blob.stream().pipeThrough(new DecompressionStream("gzip")) : blob).text());
+  }
+
+  // The example or the file that the reader asked for last. A download or a read can end after the
+  // reader asks for another graph.
+  let wanted = null;
+
   async function loadFile(file) {
-    try { await load(JSON.parse(await file.text())); } catch (err) { status("Cannot read the file: " + err.message); }
+    wanted = file;
+    for (const b of $("examples").querySelectorAll("button")) b.setAttribute("aria-checked", "false");
+    try {
+      const graph = await readGraph(file);
+      if (wanted === file) await load(graph);
+    } catch (err) { status("Cannot read the file: " + err.message); }
   }
 
   $("file").addEventListener("change", (e) => { if (e.target.files[0]) loadFile(e.target.files[0]); });
@@ -1140,33 +1156,42 @@
   resize();
   if (typeof ELK === "undefined") { status("The ELK layout library did not load."); return; }
   elk = new ELK();
-  // The page embeds its graphs as gzip-compressed JSON in base64 (see render.py). With more than one,
-  // a picker selects the graph, and the page address (#slug) keeps the choice.
-  const embedded = [...document.querySelectorAll("script.graph-data")].filter((el) => el.textContent.trim());
-  const decoded = new Map();
-  async function loadEmbedded(el) {
+  // Each <script class="graph-data"> element is one graph: gzip-compressed JSON in base64 (see
+  // render.py), or the URL of a graph file in data-src (the GitHub Pages site). With more than one
+  // graph, a picker selects the graph, and the page address (#slug) keeps the choice.
+  const examples = [...document.querySelectorAll("script.graph-data")].filter((el) => el.dataset.src || el.textContent.trim());
+  const blobs = new Map();
+  async function readExample(el) {
+    if (!el.dataset.src) return new Blob([Uint8Array.from(atob(el.textContent.trim()), (c) => c.charCodeAt(0))]);
+    const res = await fetch(el.dataset.src);
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText} for ${el.dataset.src}`);
+    return res.blob();
+  }
+  async function showExample() {
+    const el = (wanted = examples.find((e) => "#" + e.dataset.slug === location.hash) || examples[0]);
+    for (const b of $("examples").querySelectorAll("button")) b.setAttribute("aria-checked", String(b.dataset.slug === el.dataset.slug));
     status("Reading the graph…");
     await new Promise((r) => setTimeout(r));
-    if (!decoded.has(el)) {
-      const bytes = Uint8Array.from(atob(el.textContent.trim()), (c) => c.charCodeAt(0));
-      const text = await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
-      decoded.set(el, JSON.parse(text));
+    try {
+      if (!blobs.has(el)) blobs.set(el, readExample(el));
+      const graph = await readGraph(await blobs.get(el));
+      if (wanted === el) await load(graph);
+    } catch (err) {
+      blobs.delete(el);
+      if (wanted === el) status("Cannot read the graph: " + err.message);
     }
-    for (const b of $("examples").querySelectorAll("button")) b.setAttribute("aria-checked", String(b.dataset.slug === el.dataset.slug));
-    await load(decoded.get(el));
   }
-  function showExample() {
-    const el = embedded.find((e) => "#" + e.dataset.slug === location.hash) || embedded[0];
-    loadEmbedded(el).catch((err) => status("Cannot read the embedded graph: " + err.message));
-  }
-  if (embedded.length > 1) {
-    $("examples").innerHTML = embedded.map((el) => `<button role="radio" aria-checked="false" data-slug="${esc(el.dataset.slug)}">${esc(el.dataset.label)}</button>`).join("");
+  if (examples.length > 1) {
+    $("examples").innerHTML = examples.map((el) => `<button role="radio" aria-checked="false" data-slug="${esc(el.dataset.slug)}">${esc(el.dataset.label)}</button>`).join("");
     $("examples").hidden = false;
     $("examples").addEventListener("click", (e) => {
       const b = e.target.closest("button");
-      if (b && "#" + b.dataset.slug !== location.hash) location.hash = b.dataset.slug;
+      if (!b || b.getAttribute("aria-checked") === "true") return;
+      // After Open file, the page address can name the example that the reader selects.
+      if ("#" + b.dataset.slug === location.hash) showExample();
+      else location.hash = b.dataset.slug;
     });
     window.addEventListener("hashchange", showExample);
   }
-  if (embedded.length) showExample();
+  if (examples.length) showExample();
 })();

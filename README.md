@@ -73,8 +73,8 @@ hardware.
 
 `model-viewer render GRAPH.json [GRAPH.json ...] -o PAGE.html` writes the viewer page for graph
 files. With more than one graph, the page has a picker, and the page address selects a graph
-(`PAGE.html#pi0`). The viewer also opens a graph file from its Open file button, or from a file that
-you drop on it.
+(`PAGE.html#pi0`). The viewer also opens a graph file (`.json` or `.json.gz`) from its Open file
+button, or from a file that you drop on it.
 
 From Python:
 
