@@ -9,6 +9,7 @@ docs/ir.md for the format.
 import math
 import operator
 import os
+import sys
 import sysconfig
 import warnings
 from collections import defaultdict
@@ -40,6 +41,13 @@ def _model_frame(path: str) -> bool:
     if path.startswith(_TORCH_DIR):
         return path.startswith(_TORCH_MODULES)
     return not path.startswith(_OTHER_DIRS)
+
+
+def _short_path(path: str) -> str:
+    """Return ``path`` relative to the ``sys.path`` entry that holds it, which is its import path
+    (``lerobot/policies/pi0/modeling_pi0.py``). The graph then has no local directories."""
+    roots = [r for r in (os.path.join(os.path.abspath(p), "") for p in sys.path) if path.startswith(r)]
+    return path[len(max(roots, key=len)):] if roots else os.path.basename(path)
 
 
 class _ModelFrames(set):
@@ -244,7 +252,7 @@ def build_graph(ep: ExportedProgram, name: str = "model", model: torch.nn.Module
         source = None
         if frames[-1]:
             path, fn, line, code = frames[-1][-1]
-            source = f"{path}:{line} in {fn}: {code}"
+            source = f"{_short_path(path)}:{line} in {fn}: {code}"
         ops.append({
             "id": op_id, "name": node.name, "target": str(op), "module": module_id(node),
             "inputs": in_ids, "input_args": in_args, "outputs": out_ids, "attrs": attrs,
@@ -437,7 +445,7 @@ def _add_function_scopes(modules: list[dict], ops: list[dict], frames: list[list
                 n = count[(parent, fn)]
                 count[(parent, fn)] += 1
                 scope = _new_module(modules, "function", fn + (f"@{n}" if n else ""),
-                                    f"{modules[parent]['path']}/{fn}".lstrip("/"), fn, parent, file=path)
+                                    f"{modules[parent]['path']}/{fn}".lstrip("/"), fn, parent, file=_short_path(path))
                 for kind, x in items[i:j]:
                     if kind == "op":
                         ops[x]["module"] = scope

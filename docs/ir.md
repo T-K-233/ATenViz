@@ -51,7 +51,7 @@ capture did not decompose to Core ATen.
 | `const` | True if each tensor input is a constant and the op is not random. A constant op is constant-foldable. |
 | `weight_reads`, `weight_bytes` | The constant inputs of a non-constant op, and the bytes that it reads from them. 0 for a constant op. |
 | `origin`, `origin_target` | The op before the decomposition, if the capture decomposed it (`linear`, `aten.linear.default`). |
-| `source` | `file:line in function: code` of the innermost frame of the model code. |
+| `source` | `file:line in function: code` of the innermost frame of the model code. The file is its import path: the path relative to the `sys.path` entry that holds it, for example `lerobot/policies/pi0/modeling_pi0.py`. Thus the graph has no local directories. |
 
 ## modules
 
@@ -65,7 +65,7 @@ in depth-first order: a parent comes before its children. The children are in ex
 | `kind` | `module` for a module. `function` for the items that ran in one call of a Python function. `composite` for the ops that one composite op decomposed into (the `bmm`, `_softmax` and views of a decomposed attention). A composite has 2 or more ops that are not views or constants, and it is not a whole module. |
 | `name`, `path`, `class` | For a module: the last part of the path (with `@N` for a repeated call), the attribute path from the root (`model.layers.0.self_attn`), and the qualified class name. For a function: the function name, `parent path/function`, and the function name. For a composite: the FX node name, `parent path/node`, and the composite op. |
 | `call` | `false` for a module that owns module calls but that the model did not call (a `ModuleList`, or a layer whose parts a loop calls). There is no `call` field for the other entries. |
-| `file` | For a function: its source file. |
+| `file` | For a function: its source file, as an import path (see the `source` of an op). |
 | `ops` | The ids of the ops directly in the entry. |
 | `inputs`, `outputs` | The activation tensors that cross the boundary of the entry: an op inside reads an input that an op outside writes (or that is a graph input), and an op outside reads an output that an op inside writes (or that is a graph output). Constant-foldable ops do not count. |
 | `weights` | The constant tensors that the non-constant ops of the entry read. |

@@ -150,14 +150,15 @@ def test_function_scopes():
     M, O = g["modules"], g["ops"]
     scopes = [m for m in M if m["kind"] == "function"]
     assert [m["name"] for m in scopes] == ["prefix", "denoise", "denoise@1", "denoise@2"]
-    assert all(m["parent"] == 0 and m["file"].endswith("test_capture.py") for m in scopes)
+    # The files are import paths, with no local directories.
+    assert all(m["parent"] == 0 and m["file"] == "test_capture.py" for m in scopes)
     step = next(m for m in M if m["name"] == "step@1")
     assert M[step["parent"]]["name"] == "denoise@1"
     # The Euler updates between the steps stay in the root, and the noise is not folded.
     assert any(o["target"] == "aten.add.Tensor" and o["module"] == 0 for o in O)
     rand = [o for o in O if "rand" in o["target"]]
     assert len(rand) == 3 and not any(o["const"] for o in rand)
-    assert all(o["source"] and "test_capture.py" in o["source"] for o in rand)
+    assert all(o["source"].startswith("test_capture.py:") for o in rand)
 
 
 def test_cli_args():
