@@ -3,6 +3,8 @@
 ATenViz (A Tensor graph Visualizer) captures a PyTorch model as a hierarchical ATen graph, counts
 its FLOPs and its weight traffic, and shows the graph in the browser.
 
+**[Open the viewer](https://t-k-233.github.io/ATenViz/)** with the graphs of SmolVLA, π0 and π0.5.
+
 - **The graph.** `atenviz.capture` runs `torch.export` once and lowers the result to Core ATen.
   The export traces with FakeTensors, so a model on the `meta` device works and no op runs. The
   graph is one JSON file with the tensors, the ops and the tree of module calls. A compiler can read
@@ -52,9 +54,12 @@ The LeRobot policies capture one chunk of 50 actions with 10 flow-matching steps
 29,000 ops, and each capture takes 70 to 90 s:
 
 ```bash
-atenviz capture examples/lerobot_policy.py:build -a checkpoint=lerobot/smolvla_base -o out/smolvla
-atenviz capture examples/lerobot_policy.py:build -a checkpoint=lerobot/pi0_base -a dtype=bfloat16 -o out/pi0
-atenviz capture examples/lerobot_policy.py:build -a checkpoint=lerobot/pi05_base -a dtype=bfloat16 -o out/pi05
+atenviz capture examples/lerobot_policy.py:build -a checkpoint=lerobot/smolvla_base \
+    -o out/smolvla --name "SmolVLA (lerobot/smolvla_base)"
+atenviz capture examples/lerobot_policy.py:build -a checkpoint=lerobot/pi0_base -a dtype=bfloat16 \
+    -o out/pi0 --name "π0 (lerobot/pi0_base, bf16)"
+atenviz capture examples/lerobot_policy.py:build -a checkpoint=lerobot/pi05_base -a dtype=bfloat16 \
+    -o out/pi05 --name "π0.5 (lerobot/pi05_base, bf16)"
 atenviz render out/smolvla.json out/pi0.json out/pi05.json -o out/vla.html
 ```
 
@@ -89,6 +94,24 @@ Path("model.html").write_text(render_html([graph]))
 
 `capture_program` returns the `ExportedProgram`. `build_graph` converts an `ExportedProgram` that you
 export yourself, and `to_model_explorer` converts a graph for Model Explorer.
+
+## Example graphs
+
+`examples/graphs/` has the graphs of SmolVLA, π0 and π0.5 from the LeRobot commands above (LeRobot
+0.6.1, torch 2.15). Each file is gzip-compressed JSON. The viewer opens the file directly.
+
+The workflow `.github/workflows/pages.yml` deploys the viewer to GitHub Pages on each push to `main`.
+The page has a picker for the example graphs. It loads each graph from raw.githubusercontent.com at
+the commit of the deployment. To enable the site, set Settings > Pages > Source to GitHub Actions.
+
+To add or update an example graph:
+
+1. Capture the model with `-o out/SLUG`.
+2. Run `gzip -9n -c out/SLUG.json > examples/graphs/SLUG.json.gz`. With `-n`, the same graph gives the same file.
+3. For a new graph, add `SLUG:LABEL` to `EXAMPLES` in `.github/workflows/pages.yml`.
+
+Do not store the graphs with Git LFS. raw.githubusercontent.com sends the LFS pointer file, not the
+graph.
 
 ## Use the viewer
 

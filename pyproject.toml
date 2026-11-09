@@ -21,6 +21,9 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["atenviz"]
 
+[tool.hatch.build.targets.sdist]
+exclude = ["/.github", "/examples/graphs"]
+
 [tool.pytest.ini_options]
 addopts = "-ra"
 testpaths = ["tests"]

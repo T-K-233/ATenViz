@@ -1,0 +1,48 @@
+# Deploy the viewer to GitHub Pages with the graphs in examples/graphs as presets. The page loads each
+# graph from raw.githubusercontent.com at the commit that it deploys.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a deployment finish, and skip the runs that wait behind it except the last.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the site
+        env:
+          # SLUG:LABEL for each file examples/graphs/SLUG.json.gz, in picker order.
+          EXAMPLES: smolvla:SmolVLA pi0:π0 pi05:π0.5
+        run: |
+          raw="https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$GITHUB_SHA/examples/graphs"
+          links=""
+          for example in $EXAMPLES; do
+            slug=${example%%:*}
+            test -f "examples/graphs/$slug.json.gz"
+            links+="<script class=\"graph-data\" data-slug=\"$slug\" data-label=\"${example#*:}\" data-src=\"$raw/$slug.json.gz\"></script>"
+          done
+          mkdir _site
+          cp -r atenviz/viewer/. _site/
+          sed -i "s|<script id=\"graph-data\"[^>]*></script>|$links|" _site/index.html
+          grep -q 'data-src=' _site/index.html
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v5
