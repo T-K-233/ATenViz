@@ -10,8 +10,8 @@ import torch.nn.functional as F
 from torch import nn
 from torch.utils.flop_counter import FlopCounterMode
 
-from model_viewer import capture, render_html, to_model_explorer
-from model_viewer.cli import main, parse_arg
+from atenviz import capture, render_html, to_model_explorer
+from atenviz.cli import main, parse_arg
 
 
 class Attn(nn.Module):

@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Model Viewer</title>
+<title>ATenViz</title>
 <link rel="stylesheet" href="viewer.css">
 </head>
 <body>
 <header id="bar">
   <div id="examples" class="seg" role="radiogroup" aria-label="Example model" hidden></div>
-  <div id="title"><span id="model-name">Model Viewer</span><span id="model-meta"></span></div>
+  <div id="title"><span id="model-name">ATenViz</span><span id="model-meta"></span></div>
   <div id="totals"></div>
   <div id="controls">
     <input id="search" type="search" placeholder="Search modules and ops" autocomplete="off" aria-label="Search modules and ops">
@@ -18,7 +18,7 @@
     <button id="expand-all" title="Open every module">Expand all</button>
     <button id="collapse-all" title="Show only the modules of the first view">Collapse all</button>
     <button id="fit" title="Fit the graph to the window (F)">Fit</button>
-    <label class="button" title="Open a model_viewer graph file (.json or .json.gz)">Open file<input id="file" type="file" accept=".json,.gz" hidden></label>
+    <label class="button" title="Open an ATenViz graph file (.json or .json.gz)">Open file<input id="file" type="file" accept=".json,.gz" hidden></label>
   </div>
 </header>
 <main>
@@ -26,7 +26,7 @@
   <div id="stage">
     <canvas id="canvas"></canvas>
     <div id="tooltip" class="card" hidden></div>
-    <div id="status" class="card">Drop a model_viewer graph file (.json or .json.gz) here, or use Open file.</div>
+    <div id="status" class="card">Drop an ATenViz graph file (.json or .json.gz) here, or use Open file.</div>
     <div id="legend" class="card"></div>
   </div>
   <aside id="details" aria-label="Details"><p class="hint">Select a module, an op or a wire.</p></aside>

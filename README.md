@@ -1,9 +1,9 @@
-# model_viewer
+# ATenViz
 
-model_viewer captures a PyTorch model as a hierarchical ATen graph, counts its FLOPs and its weight
-traffic, and shows the graph in the browser.
+ATenViz (A Tensor graph Visualizer) captures a PyTorch model as a hierarchical ATen graph, counts
+its FLOPs and its weight traffic, and shows the graph in the browser.
 
-- **The graph.** `model_viewer.capture` runs `torch.export` once and lowers the result to Core ATen.
+- **The graph.** `atenviz.capture` runs `torch.export` once and lowers the result to Core ATen.
   The export traces with FakeTensors, so a model on the `meta` device works and no op runs. The
   graph is one JSON file with the tensors, the ops and the tree of module calls. A compiler can read
   it: see [docs/ir.md](docs/ir.md).
@@ -18,10 +18,10 @@ For the survey of the existing tools, and for the reasons to use `torch.export` 
 
 ## Install
 
-model_viewer needs Python 3.12 or later and PyTorch 2.15 or later.
+ATenViz needs Python 3.12 or later and PyTorch 2.15 or later.
 
 ```bash
-pip install .            # the package and the model-viewer command
+pip install .            # the package and the atenviz command
 uv sync --group dev      # for development: also pytest, torchvision and transformers
 ```
 
@@ -30,11 +30,11 @@ uv sync --group dev      # for development: also pytest, torchvision and transfo
 To capture a model:
 
 1. Write a function that returns the model and its example inputs: `(model, args)` or `(model, args, kwargs)`.
-2. Run `model-viewer capture FILE.py:FUNCTION -o OUT`.
+2. Run `atenviz capture FILE.py:FUNCTION -o OUT`.
 3. Open `OUT.html` in a browser.
 
 ```bash
-model-viewer capture examples/llama.py:build -o out/tiny_llama
+atenviz capture examples/llama.py:build -o out/tiny_llama
 # wrote out/tiny_llama.json  (228 ops, 43 modules)
 # wrote out/tiny_llama.html
 ```
@@ -52,10 +52,10 @@ The LeRobot policies capture one chunk of 50 actions with 10 flow-matching steps
 29,000 ops, and each capture takes 70 to 90 s:
 
 ```bash
-model-viewer capture examples/lerobot_policy.py:build -a checkpoint=lerobot/smolvla_base -o out/smolvla
-model-viewer capture examples/lerobot_policy.py:build -a checkpoint=lerobot/pi0_base -a dtype=bfloat16 -o out/pi0
-model-viewer capture examples/lerobot_policy.py:build -a checkpoint=lerobot/pi05_base -a dtype=bfloat16 -o out/pi05
-model-viewer render out/smolvla.json out/pi0.json out/pi05.json -o out/vla.html
+atenviz capture examples/lerobot_policy.py:build -a checkpoint=lerobot/smolvla_base -o out/smolvla
+atenviz capture examples/lerobot_policy.py:build -a checkpoint=lerobot/pi0_base -a dtype=bfloat16 -o out/pi0
+atenviz capture examples/lerobot_policy.py:build -a checkpoint=lerobot/pi05_base -a dtype=bfloat16 -o out/pi05
+atenviz render out/smolvla.json out/pi0.json out/pi05.json -o out/vla.html
 ```
 
 | Option | Effect |
@@ -71,7 +71,7 @@ Attention stays one op by default. Its Core ATen decomposition is the math refer
 bf16 and fp16 attention to fp32. As a result, the dtypes of a decomposed attention are wrong for
 hardware.
 
-`model-viewer render GRAPH.json [GRAPH.json ...] -o PAGE.html` writes the viewer page for graph
+`atenviz render GRAPH.json [GRAPH.json ...] -o PAGE.html` writes the viewer page for graph
 files. With more than one graph, the page has a picker, and the page address selects a graph
 (`PAGE.html#pi0`). The viewer also opens a graph file (`.json` or `.json.gz`) from its Open file
 button, or from a file that you drop on it.
@@ -81,7 +81,7 @@ From Python:
 ```python
 from pathlib import Path
 
-from model_viewer import capture, render_html
+from atenviz import capture, render_html
 
 graph = capture(model, (x,))                      # a JSON-ready dict
 Path("model.html").write_text(render_html([graph]))
@@ -112,7 +112,7 @@ chart colors for matmul (blue) and non-matmul (orange).
   the softmax of attention are non-matmul FLOPs. An elementwise op is 1 FLOP for each output
   element, and a reduction is 1 FLOP for each input element. Softmax is 5 FLOPs for each element, and
   a layer norm is 5 to 7. View ops and data-movement ops (copy, cat, gather, dtype cast) are 0 FLOPs.
-  `model_viewer/costs.py` has the tables.
+  `atenviz/costs.py` has the tables.
 - **Dtype pair.** For a matmul op, the dtype pair is the dtypes of its two operands and of its output
   (`bf16×bf16→fp32`). For other ops, it is the dtypes of its tensor inputs and of its output
   (`bf16,fp32→fp32`).
@@ -160,6 +160,6 @@ uv run pytest
 
 ## License
 
-model_viewer is under the MIT license. See [LICENSE](LICENSE). The package also contains
-`model_viewer/viewer/vendor/elk.bundled.js`, which is elkjs 0.11.0 under the EPL-2.0. See
-[model_viewer/viewer/vendor/README.md](model_viewer/viewer/vendor/README.md).
+ATenViz is under the MIT license. See [LICENSE](LICENSE). The package also contains
+`atenviz/viewer/vendor/elk.bundled.js`, which is elkjs 0.11.0 under the EPL-2.0. See
+[atenviz/viewer/vendor/README.md](atenviz/viewer/vendor/README.md).

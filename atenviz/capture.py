@@ -2,7 +2,7 @@
 
 ``capture_program`` runs ``torch.export`` once and lowers the graph to Core ATen. The export traces
 with FakeTensors, so a model on the meta device works and no op runs. ``build_graph`` converts the
-ExportedProgram to the model_viewer graph: a JSON-ready dict of tensors, ops and module calls. See
+ExportedProgram to the ATenViz graph: a JSON-ready dict of tensors, ops and module calls. See
 docs/ir.md for the format.
 """
 
@@ -22,7 +22,7 @@ from torch.utils._pytree import tree_flatten, tree_map
 
 from . import costs
 
-FORMAT = "model_viewer.graph/1"
+FORMAT = "atenviz.graph/1"
 
 # The Core ATen decomposition of scaled_dot_product_attention is the math reference. It upcasts bf16
 # and fp16 attention to fp32, so its dtypes are wrong for hardware.
@@ -69,7 +69,7 @@ def capture_program(model: torch.nn.Module, args: tuple = (), kwargs: dict | Non
 
 def capture(model: torch.nn.Module, args: tuple = (), kwargs: dict | None = None,
             keep_ops: tuple[str, ...] = DEFAULT_KEEP_OPS, name: str | None = None) -> dict:
-    """Export ``model`` with example inputs and return the model_viewer graph."""
+    """Export ``model`` with example inputs and return the ATenViz graph."""
     graph = build_graph(capture_program(model, args, kwargs, keep_ops), name or type(model).__name__, model)
     graph["model"]["kept_ops"] = list(keep_ops)
     return graph
@@ -140,7 +140,7 @@ def _new_module(modules: list[dict], kind: str, name: str, path: str, cls: str, 
 
 
 def build_graph(ep: ExportedProgram, name: str = "model", model: torch.nn.Module | None = None) -> dict:
-    """Convert an ExportedProgram to the model_viewer graph.
+    """Convert an ExportedProgram to the ATenViz graph.
 
     ``model`` is the exported module. It gives the classes of the modules that own module calls but
     are not called themselves.
@@ -209,7 +209,7 @@ def build_graph(ep: ExportedProgram, name: str = "model", model: torch.nn.Module
         if node.op != "call_function" or not any(isinstance(v, torch.Tensor) for v in tree_flatten(val)[0]):
             continue  # assertions and symbolic-int arithmetic
         if not isinstance(node.target, torch._ops.OpOverload):
-            warnings.warn(f"model_viewer: {node.target} is not an ATen op; its tensors have no producer")
+            warnings.warn(f"atenviz: {node.target} is not an ATen op; its tensors have no producer")
             continue
 
         op = node.target

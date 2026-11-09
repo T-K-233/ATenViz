@@ -1,12 +1,12 @@
-# Graph format (`model_viewer.graph/1`)
+# Graph format (`atenviz.graph/1`)
 
-`model_viewer.capture` returns one JSON object, and `model-viewer capture` writes it to a file. The
+`atenviz.capture` returns one JSON object, and `atenviz capture` writes it to a file. The
 object is a dataflow graph in SSA form: each tensor has one producer op, or no producer for a graph
 input or a weight. The ids are list indices.
 
 ```json
 {
-  "format": "model_viewer.graph/1",
+  "format": "atenviz.graph/1",
   "model": {"name": "LlamaForCausalLM", "torch_version": "2.15.0",
             "kept_ops": ["aten.scaled_dot_product_attention.default"]},
   "inputs": [1],

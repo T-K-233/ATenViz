@@ -1,7 +1,7 @@
 """Llama models in bf16 (HuggingFace transformers), built on the meta device: no weights in memory.
 
-    uv run model-viewer capture examples/llama.py:build -o out/tiny_llama
-    uv run model-viewer capture examples/llama.py:build_7b -o out/llama7b
+    uv run atenviz capture examples/llama.py:build -o out/tiny_llama
+    uv run atenviz capture examples/llama.py:build_7b -o out/llama7b
 """
 
 import torch

@@ -1,4 +1,4 @@
-"""Convert a model_viewer graph to the graph JSON of Google AI Edge Model Explorer.
+"""Convert an ATenViz graph to the graph JSON of Google AI Edge Model Explorer.
 
 Model Explorer (https://github.com/google-ai-edge/model-explorer) opens this JSON file directly. Each
 module becomes a layer (a ``/``-separated namespace), and the module totals are layer attributes.

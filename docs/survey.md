@@ -50,7 +50,7 @@ total of `FlopCounterMode` on an eager run (unit test). The Llama-2-7B total (29
 to 2 × the linear parameters × the tokens, plus the attention matmuls.
 
 The registry has no formulas for elementwise ops, reductions or norms, so it counts them as 0. The
-tool adds the rules in `model_viewer/costs.py`.
+tool adds the rules in `atenviz/costs.py`.
 
 ## 3. Is ONNX useful?
 

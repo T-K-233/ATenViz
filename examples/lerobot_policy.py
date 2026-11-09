@@ -1,7 +1,7 @@
 """A LeRobot policy: one action chunk of ``predict_action_chunk``, as ``lerobot-record`` runs it.
 
-    model-viewer capture examples/lerobot_policy.py:build -a checkpoint=lerobot/smolvla_base
-    model-viewer capture examples/lerobot_policy.py:build -a checkpoint=lerobot/pi0_base -a dtype=bfloat16
+    atenviz capture examples/lerobot_policy.py:build -a checkpoint=lerobot/smolvla_base
+    atenviz capture examples/lerobot_policy.py:build -a checkpoint=lerobot/pi0_base -a dtype=bfloat16
 
 The other ``-a KEY=VALUE`` arguments set fields of the policy config, for example ``dtype=bfloat16``
 (pi0, pi05) or ``num_inference_steps=5``.

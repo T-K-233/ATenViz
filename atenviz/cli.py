@@ -40,7 +40,7 @@ def parse_arg(text: str) -> tuple[str, object]:
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(prog="model-viewer", description=__doc__)
+    parser = argparse.ArgumentParser(prog="atenviz", description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
     cap = sub.add_parser("capture", help="Export a model and write OUT.json (the graph) and OUT.html (the viewer).")
     cap.add_argument("spec", help="FILE.py:FUNCTION or MODULE:FUNCTION. The function returns (model, args) or "

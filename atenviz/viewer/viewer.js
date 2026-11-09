@@ -1,5 +1,5 @@
 "use strict";
-// Model Viewer: draws a model_viewer graph (docs/ir.md) as nested module boxes.
+// ATenViz: draws an ATenViz graph (docs/ir.md) as nested module boxes.
 //
 // A module is open (a box with its ops, child modules, inputs and outputs) or closed (a summary
 // card). Each open module has its own layered layout (ELK, from top to bottom), with its children at
@@ -1012,7 +1012,7 @@
     const s = G.modules[0].stats;
     $("model-name").textContent = G.model.name;
     $("model-meta").textContent = "Core ATen · torch " + G.model.torch_version;
-    document.title = G.model.name + " · Model Viewer";
+    document.title = G.model.name + " · ATenViz";
     const chip = (dot, k, v) => `<span class="chip">${dot ? `<span class="dot" style="background:${dot}"></span>` : ""}<span class="k">${k}</span><b>${v}</b></span>`;
     $("totals").innerHTML = chip("var(--chart-1)", "matmul", fmtFlops(sum(s.flops.matmul))) +
       chip("var(--chart-2)", "non-matmul", fmtFlops(sum(s.flops.nonmatmul))) +
@@ -1090,8 +1090,8 @@
   const enqueue = (fn) => (queue = queue.catch(() => {}).then(fn));
 
   const load = (graph) => enqueue(async () => {
-    if (!graph || !String(graph.format || "").startsWith("model_viewer.graph/")) {
-      status("This file is not a model_viewer graph.");
+    if (!graph || !String(graph.format || "").startsWith("atenviz.graph/")) {
+      status("This file is not an ATenViz graph.");
       return;
     }
     V = null;
