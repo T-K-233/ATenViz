@@ -3,9 +3,10 @@
 One FLOP is one scalar arithmetic operation. A multiply-accumulate is 2 FLOPs, and a transcendental
 function (exp, erf, rsqrt) is 1 FLOP. Each op has two counts:
 
-- matmul: the contraction of a matmul, convolution or attention op (2 * M * N * K). The matmul and
-  convolution formulas come from ``torch.utils.flop_counter``.
-- nonmatmul: all other arithmetic, which includes the bias add of addmm and the softmax of attention.
+- matmul: the contraction of a matmul, grouped matmul, convolution or attention op (2 * M * N * K).
+  The matmul and convolution formulas come from ``torch.utils.flop_counter``.
+- nonmatmul: all other arithmetic, which includes the bias add of addmm, the softmax of attention and
+  the dequantization of a quantized weight.
 
 A view op or a data-movement op (copy, cat, gather, dtype cast) is 0 FLOPs. An op that is not in a
 table below is 1 FLOP for each output element.
@@ -14,16 +15,26 @@ table below is 1 FLOP for each output element.
 import math
 
 import torch
+from torch.utils._dtype_abbrs import dtype_abbrs
 from torch.utils._pytree import tree_flatten
 from torch.utils.flop_counter import flop_registry
 
+from . import quant  # noqa: F401  (registers atenviz.quantized_mm)
+
 aten = torch.ops.aten
+quantized_mm = torch.ops.atenviz.quantized_mm
+
+# The integer dtypes of 1 to 7 bits. torch stores one element in each byte, and a deployment packs them.
+SUB_BYTE_BITS = {getattr(torch, f"{sign}int{bits}"): bits for sign in ("u", "") for bits in range(1, 8)}
+# torch prints a graph for its trace log with a short name for each dtype, and it has no names for these.
+dtype_abbrs.update({d: d.abbr for d in SUB_BYTE_BITS})
 
 DTYPE_NAMES = {
     torch.float64: "fp64", torch.float32: "fp32", torch.float16: "fp16", torch.bfloat16: "bf16",
     torch.float8_e4m3fn: "fp8e4m3", torch.float8_e5m2: "fp8e5m2", torch.int64: "i64", torch.int32: "i32",
     torch.int16: "i16", torch.int8: "i8", torch.uint8: "u8", torch.bool: "bool", torch.complex64: "c64",
     torch.complex128: "c128",
+    **{d: f"{'i' if d.is_signed else 'u'}{bits}" for d, bits in SUB_BYTE_BITS.items()},
 }
 
 # The two operands of each matmul op, by schema argument name. Attention ops use (query, key).
@@ -31,6 +42,7 @@ MATMUL_OPERANDS = {
     aten.mm: ("self", "mat2"), aten.bmm: ("self", "mat2"), aten.addmm: ("mat1", "mat2"),
     aten.baddbmm: ("batch1", "batch2"), aten._scaled_mm: ("self", "mat2"), aten.linear: ("input", "weight"),
     aten.convolution: ("input", "weight"), aten._convolution: ("input", "weight"),
+    aten._grouped_mm: ("self", "mat2"), aten._scaled_grouped_mm: ("self", "mat2"), quantized_mm: ("input", "weight"),
 }
 
 # Ops that create, copy, cast, gather or reorder data.
@@ -41,6 +53,7 @@ DATA_MOVEMENT = {
     aten.lift_fresh_copy, aten.repeat, aten.flip, aten.roll, aten.scatter, aten.index_put, aten.slice_scatter,
     aten.select_scatter, aten.diagonal_scatter, aten.as_strided_scatter, aten.pixel_shuffle,
     aten.pixel_unshuffle, aten._unsafe_view, aten.tril, aten.triu, aten.resize_, aten.fill, aten.fill_,
+    aten.empty_permuted, aten.masked_scatter,
 }
 
 # Ops that read only the elements they select. A gather from a weight (an embedding lookup) reads as
@@ -51,7 +64,7 @@ GATHER = {aten.embedding, aten.index_select, aten.index, aten.gather, aten.take}
 REDUCTIONS = {
     aten.sum, aten.mean, aten.amax, aten.amin, aten.max, aten.min, aten.prod, aten.any, aten.all, aten.argmax,
     aten.argmin, aten.cumsum, aten.cumprod, aten.logsumexp, aten.norm, aten.linalg_vector_norm,
-    aten._adaptive_avg_pool2d, aten.adaptive_avg_pool2d,
+    aten._adaptive_avg_pool2d, aten.adaptive_avg_pool2d, aten.topk, aten.histc,
 }
 
 # Ops that make several passes over their input: FLOPs = passes * input elements.
@@ -86,6 +99,11 @@ def dtype_name(dtype: torch.dtype) -> str:
     return DTYPE_NAMES.get(dtype, str(dtype))
 
 
+def nbytes(numel: int, dtype: torch.dtype) -> int:
+    """Return the bytes of ``numel`` elements, with the elements of fewer than 8 bits packed."""
+    return -(-numel * SUB_BYTE_BITS.get(dtype, 8 * dtype.itemsize) // 8)
+
+
 def is_view(op: torch._ops.OpOverload) -> bool:
     """Return True if every output of ``op`` aliases an input, so that the op moves no data."""
     returns = op._schema.returns
@@ -108,6 +126,14 @@ def op_flops(op: torch._ops.OpOverload, args: dict, positional: list, kwargs: di
         masked = args.get("attn_mask") is not None or bool(args.get("is_causal"))
         return 2 * scores * (embed + value), scores * (6 + masked)  # scale, softmax, mask
     outputs = [t for t in tree_flatten(out)[0] if isinstance(t, torch.Tensor)]
+    if packet in (aten._grouped_mm, aten._scaled_grouped_mm):  # the experts of a mixture-of-experts layer
+        a, b = args["self"], args["mat2"]
+        # Each row meets only the weights of its own group. 2-D x 2-D splits the contraction into
+        # groups and gives one output matrix for each group.
+        matmul = 2 * a.shape[0] * a.shape[1] * b.shape[1] if a.dim() == b.dim() == 2 else 2 * _numel(out) * a.shape[-1]
+        return matmul, _numel(out) if args.get("bias") is not None else 0
+    if packet is quantized_mm:  # the dequantization is a multiply and an add for each weight element
+        return 2 * _numel(out) * args["input"].shape[-1], 2 * _numel(args["weight"])
     if packet is aten.linear:
         return 2 * _numel(out) * args["weight"].shape[-1], _numel(out) if args.get("bias") is not None else 0
     if packet in flop_registry:

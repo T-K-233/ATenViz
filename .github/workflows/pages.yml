@@ -27,16 +27,22 @@ jobs:
       - uses: actions/checkout@v7
       - name: Build the site
         env:
-          # SLUG:LABEL for each file examples/graphs/SLUG.json.gz, in picker order.
-          EXAMPLES: smolvla:SmolVLA pi0:π0 pi05:π0.5
+          # One SLUG:LABEL line for each file examples/graphs/SLUG.json.gz, in picker order.
+          EXAMPLES: |
+            smolvla:SmolVLA
+            pi0:π0
+            pi05:π0.5
+            halo_generator:HALO generator
+            halo_orchestrator:HALO orchestrator
+            halo_tracker_depth:HALO depth tracker
+            halo_tracker_proprio:HALO proprio tracker
         run: |
           raw="https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$GITHUB_SHA/examples/graphs"
           links=""
-          for example in $EXAMPLES; do
-            slug=${example%%:*}
+          while IFS=: read -r slug label; do
             test -f "examples/graphs/$slug.json.gz"
-            links+="<script class=\"graph-data\" data-slug=\"$slug\" data-label=\"${example#*:}\" data-src=\"$raw/$slug.json.gz\"></script>"
-          done
+            links+="<script class=\"graph-data\" data-slug=\"$slug\" data-label=\"$label\" data-src=\"$raw/$slug.json.gz\"></script>"
+          done <<< "${EXAMPLES%$'\n'}"
           mkdir _site
           cp -r atenviz/viewer/. _site/
           sed -i "s|<script id=\"graph-data\"[^>]*></script>|$links|" _site/index.html

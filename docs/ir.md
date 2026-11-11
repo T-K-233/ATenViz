@@ -26,7 +26,7 @@ capture did not decompose to Core ATen.
 | Field | Meaning |
 | --- | --- |
 | `id`, `name` | The index, and the name: the parameter path for a weight (`model.layers.0.mlp.up_proj.weight`), the input name, or the FX node name. An op with more than one output names them `node.0`, `node.1`. |
-| `shape`, `dtype`, `bytes` | The static shape, the short dtype name (`bf16`, `fp32`, `i64`, `fp8e4m3`), and `numel * itemsize`. |
+| `shape`, `dtype`, `bytes` | The static shape, the short dtype name (`bf16`, `fp32`, `i64`, `fp8e4m3`, `u4`), and the bytes. The bytes of a dtype of 1 to 7 bits (`u4`, `i4`) are packed: `numel * bits / 8`, rounded up. torch stores one element in each byte. |
 | `symbolic_shape` | Only for a tensor with a data-dependent size (from a boolean mask or `nonzero`): the shape with symbols, for example `["u0"]`. Then `shape` and `bytes` use the upper bound of each symbol. |
 | `kind` | `input`, `param`, `buffer`, `constant` (a lifted tensor constant) or `activation` (an op output). |
 | `const` | True for a weight, and for the output of a constant-foldable op. |
@@ -39,11 +39,11 @@ capture did not decompose to Core ATen.
 | Field | Meaning |
 | --- | --- |
 | `id`, `name` | The index and the FX node name. |
-| `target` | The ATen overload, for example `aten.addmm.default`. |
+| `target` | The ATen overload, for example `aten.addmm.default`, or `atenviz.quantized_mm.default`. See [Quantized matmul](#quantized-matmul). |
 | `module` | The id of the innermost module that runs the op. |
 | `inputs`, `input_args` | The ids of the tensors that the op reads, and the schema argument name of each (`mat1`, `mat2`, `self`). A list argument (the tensors of `cat`) gives one entry for each tensor. |
 | `outputs` | The ids of the tensors that the op writes. Tuple outputs are flat: there are no `getitem` ops. |
-| `attrs` | The non-tensor arguments by schema name, for example `{"dim": [-1], "eps": 1e-05}`. Only the arguments of the call, not the defaults. |
+| `attrs` | The non-tensor arguments by schema name, for example `{"dim": [-1], "eps": 1e-05}`. Only the arguments of the call, not the defaults. A non-finite float is a string: `"inf"`, `"-inf"` or `"nan"`. |
 | `flops` | `{"matmul": int, "nonmatmul": int}`. |
 | `dtype` | The dtype pair, for example `bf16×bf16→bf16`. |
 | `category` | `matmul` if `flops.matmul > 0`, else `nonmatmul` if `flops.nonmatmul > 0`, else `none`. |
@@ -52,6 +52,18 @@ capture did not decompose to Core ATen.
 | `weight_reads`, `weight_bytes` | The constant inputs of a non-constant op, and the bytes that it reads from them. 0 for a constant op. |
 | `origin`, `origin_target` | The op before the decomposition, if the capture decomposed it (`linear`, `aten.linear.default`). |
 | `source` | `file:line in function: code` of the innermost frame of the model code. The file is its import path: the path relative to the `sys.path` entry that holds it, for example `lerobot/policies/pi0/modeling_pi0.py`. Thus the graph has no local directories. |
+
+### Quantized matmul
+
+`atenviz.quantized_mm(input, weight, scales, biases, offs=None)` is a matmul with a quantized weight
+(`atenviz.quantize`). The weight [N, K] has unsigned integers `q` of 1 to 8 bits (`u4`). `scales` and
+`biases` are [N, K / G], one value for each group of G elements along K. The weight is
+`scale * q + bias`, as in the affine mode of MLX, and the op returns `input @ weight.T`, as
+`aten.linear`. With `offs`, the weight [E, N, K] has one matrix for each expert, and `offs` gives the
+end row of each expert in `input`, as for `aten._grouped_mm`.
+
+The dtype pair is `input×weight→output`, for example `bf16×u4→bf16`. The matmul FLOPs are
+`2 * output elements * K`, and the dequantization is 2 non-matmul FLOPs for each weight element.
 
 ## modules
 

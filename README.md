@@ -3,7 +3,8 @@
 ATenViz (A Tensor graph Visualizer) captures a PyTorch model as a hierarchical ATen graph, counts
 its FLOPs and its weight traffic, and shows the graph in the browser.
 
-**[Open the viewer](https://t-k-233.github.io/ATenViz/)** with the graphs of SmolVLA, π0 and π0.5.
+**[Open the viewer](https://t-k-233.github.io/ATenViz/)** with the graphs of SmolVLA, π0, π0.5 and the
+three models of [HALO](https://github.com/apple-aiml-research/ml-halo).
 
 - **The graph.** `atenviz.capture` runs `torch.export` once and lowers the result to Core ATen.
   The export traces with FakeTensors, so a model on the `meta` device works and no op runs. The
@@ -49,6 +50,7 @@ atenviz capture examples/llama.py:build -o out/tiny_llama
 | `examples/llama.py:build_7b` | A Llama with the sizes of Llama-2-7B. The capture takes about 9 s. |
 | `examples/resnet.py:build` | torchvision ResNet-18. |
 | `examples/lerobot_policy.py:build` | A LeRobot policy, for example SmolVLA, pi0 or pi0.5. See the file for the LeRobot install. |
+| `examples/halo.py:build_generator`, `build_tracker`, `build_orchestrator` | The three models of [HALO](https://github.com/apple-aiml-research/ml-halo): the motion generator, the tracking policy and the planner. See the file for the commands. |
 
 The LeRobot policies capture one chunk of 50 actions with 10 flow-matching steps. This is 24,000 to
 29,000 ops, and each capture takes 70 to 90 s:
@@ -98,7 +100,9 @@ export yourself, and `to_model_explorer` converts a graph for Model Explorer.
 ## Example graphs
 
 `examples/graphs/` has the graphs of SmolVLA, π0 and π0.5 from the LeRobot commands above (LeRobot
-0.6.1, torch 2.15). Each file is gzip-compressed JSON. The viewer opens the file directly.
+0.6.1, torch 2.15), and the graphs of HALO from the commands in `examples/halo.py` (transformers
+5.22, ml-halo at commit 35d8334). Each file is gzip-compressed JSON. The viewer opens the file
+directly.
 
 The workflow `.github/workflows/pages.yml` deploys the viewer to GitHub Pages on each push to `main`.
 The page has a picker for the example graphs. It loads each graph from raw.githubusercontent.com at
@@ -108,10 +112,32 @@ To add or update an example graph:
 
 1. Capture the model with `-o out/SLUG`.
 2. Run `gzip -9n -c out/SLUG.json > examples/graphs/SLUG.json.gz`. With `-n`, the same graph gives the same file.
-3. For a new graph, add `SLUG:LABEL` to `EXAMPLES` in `.github/workflows/pages.yml`.
+3. For a new graph, add a `SLUG:LABEL` line to `EXAMPLES` in `.github/workflows/pages.yml`.
 
 Do not store the graphs with Git LFS. raw.githubusercontent.com sends the LFS pointer file, not the
 graph.
+
+## Quantized weights
+
+To capture a model with the quantized weights of its deployment, replace its layers before the
+capture:
+
+```python
+from atenviz import quantize
+
+quantize(model.model.language_model, bits=4, group_size=64)  # each nn.Linear and nn.Embedding
+```
+
+A quantized weight has unsigned integers of `bits` bits (`torch.uint4` for 4 bits). Each group of
+`group_size` elements along the input dimension has one scale and one bias, in the dtype of the
+original weight. This is the affine mode of MLX. A quantized linear layer is one op,
+`atenviz.quantized_mm`, with the dtype pair `bf16×u4→bf16`. See [docs/ir.md](docs/ir.md#quantized-matmul).
+For other layers, use `QuantizedLinear` and `QuantizedEmbedding`. A `QuantizedLinear` also holds the
+3-D weight of the experts of a mixture-of-experts layer. `examples/halo.py:build_orchestrator` has an
+example.
+
+The quantized modules have empty weights, and torch has no kernels for 4-bit dtypes. Thus a model
+with 4-bit weights runs only on the meta device.
 
 ## Use the viewer
 
@@ -131,8 +157,10 @@ chart colors for matmul (blue) and non-matmul (orange).
 ## How the tool counts
 
 - **FLOPs.** A multiply-accumulate is 2 FLOPs. The matmul and convolution formulas come from
-  `torch.utils.flop_counter`, so the totals agree with `FlopCounterMode`. The bias add of addmm and
-  the softmax of attention are non-matmul FLOPs. An elementwise op is 1 FLOP for each output
+  `torch.utils.flop_counter`, so the totals agree with `FlopCounterMode`. A grouped matmul (the
+  experts of a mixture-of-experts layer) is 2 × K × N FLOPs for each routed row. The bias add of addmm,
+  the softmax of attention and the dequantization of a quantized weight (2 FLOPs for each weight
+  element) are non-matmul FLOPs. An elementwise op is 1 FLOP for each output
   element, and a reduction is 1 FLOP for each input element. Softmax is 5 FLOPs for each element, and
   a layer norm is 5 to 7. View ops and data-movement ops (copy, cat, gather, dtype cast) are 0 FLOPs.
   `atenviz/costs.py` has the tables.
@@ -144,7 +172,8 @@ chart colors for matmul (blue) and non-matmul (orange).
   from a buffer, or a causal mask. The output of a constant-foldable op counts as a weight, and its
   FLOPs are not in the totals. "Weights read" is the sum of the weight bytes that each op reads. A
   view of a weight reads at most the bytes of the weight, and an embedding lookup reads only the rows
-  that it selects. "Unique" counts each weight once.
+  that it selects. "Unique" counts each weight once. A dtype of fewer than 8 bits counts as packed: a
+  4-bit weight is 0.5 bytes for each element.
 
 ## Module hierarchy
 
@@ -174,6 +203,9 @@ model code.
 - The export runs under `torch.no_grad()`. The ops in a `torch.autocast` region keep their casts, but
   they lose their module box, because `run_decompositions` gives them the metadata of the region.
 - The non-matmul FLOPs follow the rules above. They are not a cost model of a specific hardware.
+- A grouped matmul reads the weights of all its experts in the count. At run time, the router selects
+  the experts of each token. Thus for a few tokens, for example one decoding step, the real weight
+  traffic is smaller.
 
 ## Test
 

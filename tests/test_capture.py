@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from torch import nn
 from torch.utils.flop_counter import FlopCounterMode
 
-from atenviz import capture, render_html, to_model_explorer
+from atenviz import capture, quantize, render_html, to_model_explorer
 from atenviz.cli import main, parse_arg
 
 
@@ -160,6 +160,59 @@ def test_function_scopes():
     assert len(rand) == 3 and not any(o["const"] for o in rand)
     assert all(o["source"].startswith("test_capture.py:") for o in rand)
 
+
+
+def test_grouped_mm():
+    class Experts(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.weight = torch.nn.Parameter(torch.randn(4, 16, 8, dtype=torch.bfloat16))
+
+        def forward(self, x, offs):
+            return torch.nn.functional.grouped_mm(x, self.weight, offs=offs)
+
+    x = torch.randn(12, 16, dtype=torch.bfloat16, device="meta")
+    offs = torch.tensor([3, 6, 9, 12], dtype=torch.int32, device="meta")
+    g = capture(Experts().to("meta"), (x, offs))
+    op = next(o for o in g["ops"] if o["target"] == "aten._grouped_mm.default")
+    # 12 routed rows, each through one 16 x 8 expert matrix.
+    assert op["flops"] == {"matmul": 2 * 12 * 16 * 8, "nonmatmul": 0}
+    assert op["dtype"] == "bf16×bf16→bf16" and op["category"] == "matmul"
+
+
+def test_quantized():
+    model = quantize(nn.Sequential(nn.Embedding(10, 128), nn.Linear(128, 16)).to("meta", torch.bfloat16))
+    g = capture(model, (torch.zeros(1, 3, dtype=torch.long, device="meta"),))
+    tensors = g["tensors"]
+    mm = next(o for o in g["ops"] if o["target"] == "atenviz.quantized_mm.default")
+    assert mm["dtype"] == "bf16×u4→bf16"
+    # 3 rows through a 128 x 16 matrix. The dequantization is 2 FLOPs for each weight element.
+    assert mm["flops"] == {"matmul": 2 * 3 * 128 * 16, "nonmatmul": 2 * 16 * 128}
+    # 4-bit weights, and a bf16 scale and bias for each group of 64.
+    assert mm["weight_bytes"] == 16 * 128 // 2 + 2 * (16 * 2) * 2
+    lookup = next(o for o in g["ops"] if tensors[o["inputs"][0]]["dtype"] == "u4" and o is not mm)
+    assert lookup["target"] == "aten.embedding.default" and lookup["weight_bytes"] == 3 * 128 // 2
+
+
+def test_quantized_mm_reference():
+    q = torch.randint(0, 256, (2, 16, 64), dtype=torch.uint8)
+    scales, biases = torch.rand(2, 16, 1), torch.rand(2, 16, 1)  # one group of 64
+    w = q * scales + biases
+    x = torch.randn(4, 64)
+    torch.testing.assert_close(torch.ops.atenviz.quantized_mm(x, q[0], scales[0], biases[0]), x @ w[0].T)
+    offs = torch.tensor([1, 4], dtype=torch.int32)  # row 0 to expert 0, rows 1 to 3 to expert 1
+    torch.testing.assert_close(torch.ops.atenviz.quantized_mm(x, q, scales, biases, offs),
+                               torch.cat([x[:1] @ w[0].T, x[1:] @ w[1].T]))
+
+
+def test_strict_json():
+    class Mask(torch.nn.Module):
+        def forward(self, x):
+            return x.masked_fill(x > 0, float("-inf"))
+
+    g = capture(Mask(), (torch.randn(2, 3),))
+    text = json.dumps(g, allow_nan=False)  # a browser cannot parse Infinity or NaN
+    assert '"-inf"' in text
 
 def test_cli_args():
     assert parse_arg("checkpoint=lerobot/pi0_base") == ("checkpoint", "lerobot/pi0_base")

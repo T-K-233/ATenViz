@@ -88,6 +88,9 @@ def _qualname(cls: type) -> str:
 
 
 def _jsonable(v):
+    # JSON has no inf or nan, so a non-finite float becomes "inf", "-inf" or "nan".
+    if isinstance(v, float) and not math.isfinite(v):
+        return str(v)
     if v is None or isinstance(v, (bool, int, float, str)):
         return v
     if isinstance(v, (list, tuple)):
@@ -165,7 +168,7 @@ def build_graph(ep: ExportedProgram, name: str = "model", model: torch.nn.Module
         sizes = [_size(d) for d in t.shape]
         shape = [n for n, _ in sizes]
         tensors.append({"id": len(tensors), "name": tname, "shape": shape, "dtype": costs.dtype_name(t.dtype),
-                        "bytes": math.prod(shape) * t.dtype.itemsize, "kind": kind,
+                        "bytes": costs.nbytes(math.prod(shape), t.dtype), "kind": kind,
                         "const": kind in ("param", "buffer", "constant"), "producer": producer, "source": source})
         if any(sym for _, sym in sizes):
             tensors[-1]["symbolic_shape"] = [sym or n for n, sym in sizes]
