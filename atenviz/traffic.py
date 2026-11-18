@@ -232,14 +232,18 @@ def traffic(graph: dict, capacity: float = math.inf, fusion: str = "epilogue", w
             kin[k][r] = min(size[r], b)
         kout[k] = inside
         kflops[k] = sum(O[o]["flops"]["matmul"] + O[o]["flops"]["nonmatmul"] for o in ops)
+    def base(r):  # the storage that a part of a storage belongs to
+        return r[1] if isinstance(r, tuple) and r[0] == "part" else r
+
     read_by = defaultdict(set)
     for k in members:
         for r in kin[k]:
             read_by[r].add(k)
+            read_by[base(r)].add(k)
     for k in members:  # a tensor that only its own kernel reads stays in registers
         kout[k] = {r for r in kout[k] if r in out_roots or read_by[r] - {k}}
     made_by = {r: k for k in members for r in kout[k]}
-    deps = {k: {made_by[r] for r in kin[k] if r in made_by} - {k} for k in members}
+    deps = {k: {made_by[base(r)] for r in kin[k] if base(r) in made_by} - {k} for k in members}
     order, done, ready = [], set(), sorted(k for k in members if not deps[k])
     waiting = {k: set(d) for k, d in deps.items() if d}
     users = defaultdict(list)
@@ -262,6 +266,8 @@ def traffic(graph: dict, capacity: float = math.inf, fusion: str = "epilogue", w
     for i, k in enumerate(order):
         for r in kin[k]:
             uses[r].append(i)
+            if base(r) != r:
+                uses[base(r)].append(i)
 
     def next_use(r: int, i: int) -> float:
         u = uses[r]
@@ -275,7 +281,7 @@ def traffic(graph: dict, capacity: float = math.inf, fusion: str = "epilogue", w
     for i, k in enumerate(order):
         rd = wr = 0
         for r, b in kin[k].items():
-            if r in resident:
+            if r in resident or base(r) in resident:
                 continue
             rd += b
             if isinstance(r, tuple) and (r[0] != "part" or isinstance(r[1], tuple)):

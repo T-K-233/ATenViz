@@ -102,6 +102,17 @@ def test_repeated_heads_are_read_once():
     assert r["reads"] == (8 + 2 + 2) * 64 * 16 * 4 and len(r["kernels"]) == 1
 
 
+class Halves(nn.Module):
+    def forward(self, x):
+        y = x * 2
+        return y[:, :8] + 1, y[:, 8:] * 3
+
+
+def test_slices_of_an_on_chip_tensor_are_not_read_again():
+    g = capture(Halves(), (torch.randn(4, 16),))
+    assert traffic(g, math.inf, "none")["reads"] == 4 * 16 * 4
+
+
 class Experts(nn.Module):
     def __init__(self, e=16, d=8):
         super().__init__()
