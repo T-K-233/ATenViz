@@ -32,12 +32,15 @@ values of both:
 
 Other rules:
 
-- A view reads at most the bytes of its storage. A constant op (``const``) is folded before the run: its
+- A view reads at most the bytes of its storage. A ``clone`` of a broadcast view (the keys and values
+  that grouped-query attention repeats for each head) is a view: attention kernels read the shared heads. A constant op (``const``) is folded before the run: its
   output is a weight in DRAM.
 - A gather from a weight (an embedding lookup, the experts that a router selects) is a view of the
   weight: the op that uses the rows reads them from the weight, at most the bytes of the weight. Thus a
   trace that gathers one copy of the experts for each token (``batched_mm``) reads each expert at most
   once in a kernel, as a grouped matmul does.
+- Output assembly: a ``cat`` or ``stack`` that makes a graph output (the caches of all layers in one
+  tensor) moves no data: its inputs are graph outputs, written in place.
 - State update: a ``cat``, ``index_put`` or ``*_scatter`` whose first input is a graph input and whose
   output is a graph output (a key-value cache, a recurrent state) updates the state in place. It writes
   only its other inputs to DRAM.
@@ -79,7 +82,8 @@ def traffic(graph: dict, capacity: float = math.inf, fusion: str = "epilogue", w
     """Return the DRAM traffic of one run of ``graph`` (see the module docstring).
 
     ``act_dtype`` is one dtype for every floating-point tensor that is not a weight (inputs, outputs and
-    activations), or a dict from a glob on the tensor name to a dtype (the first match wins).
+    activations), a dict from a glob on the tensor name to a dtype (the first match wins), or a function
+    ``(tensor) -> dtype or None`` that gets the tensor's dict.
     ``weight_dtype`` is one dtype name for every floating-point weight, a dict from a glob on the
     weight name to a dtype name (the first match wins; no match keeps the dtype of the capture), or a
     function ``(weight name, op) -> dtype name or None`` for a weight whose dtype depends on the op that
@@ -109,6 +113,8 @@ def traffic(graph: dict, capacity: float = math.inf, fusion: str = "epilogue", w
             return next((v for k, v in (weight_dtype or {}).items() if fnmatch.fnmatchcase(name, k)), d)
         if isinstance(act_dtype, dict):
             return next((v for k, v in act_dtype.items() if fnmatch.fnmatchcase(t["name"], k)), d)
+        if callable(act_dtype):
+            return act_dtype(t) or d
         return act_dtype or d
 
     def nbytes(t: dict, d) -> int:
@@ -128,6 +134,8 @@ def traffic(graph: dict, capacity: float = math.inf, fusion: str = "epilogue", w
         if op["const"] or not op["inputs"]:
             continue
         src = op["inputs"][0]
+        if _packet(op) == "clone" and math.prod(T[src]["shape"]) > math.prod(T[root[src]]["shape"]):
+            alias[op["id"]] = True  # a broadcast made contiguous
         if _packet(op) in GATHER and T[src]["const"]:
             alias[op["id"]] = True
             weight_of.update((t, src) for t in op["outputs"])
@@ -140,7 +148,13 @@ def traffic(graph: dict, capacity: float = math.inf, fusion: str = "epilogue", w
                 root[t] = root[src]
     in_roots = {root[t] for t in graph["inputs"]}
     out_roots = {root[t] for t in graph["outputs"]}
-    run = [op for op in O if not (op["const"] or alias[op["id"]])]
+    assemble = set()
+    for op in reversed(O):
+        if (not op["const"] and _packet(op) in ("cat", "stack") and op["id"] not in assemble
+                and all(root[t] in out_roots for t in op["outputs"])):
+            assemble.add(op["id"])
+            out_roots.update(root[t] for t in op["inputs"])
+    run = [op for op in O if not (op["const"] or alias[op["id"]] or op["id"] in assemble)]
     producer = {}
     for op in run:
         for t in op["outputs"]:
