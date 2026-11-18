@@ -180,6 +180,36 @@ chart colors for matmul (blue) and non-matmul (orange).
   that it selects. "Unique" counts each weight once. A dtype of fewer than 8 bits counts as packed: a
   4-bit weight is 0.5 bytes for each element.
 
+## Memory traffic
+
+"Weights read" is not the DRAM traffic of a model. The traffic also has the activations that do not
+stay on chip, and it depends on two things that the graph does not set: how the ops fuse into kernels,
+and how much on-chip memory holds data between kernels. `atenviz traffic` counts the reads and the
+writes for stated values of both, and gives the operational intensity (FLOPs per byte):
+
+```bash
+atenviz traffic out/tiny_llama.json -c 0 -c 32M -c inf --act-dtype bf16 --weight-dtype bf16
+```
+
+- `--capacity` (`-c`): the bytes of on-chip memory. `0` gives the traffic at the kernel boundaries:
+  each kernel reads its inputs and writes its outputs. `inf` gives the compulsory traffic: each weight
+  and input is read once, and each output is written once. Between the two, the memory holds whole
+  tensors and keeps the ones that are used soonest.
+- `--fusion`: `none` (each op is a kernel, as eager PyTorch), `vector` (the non-matmul ops between two
+  matmuls are one kernel) or `epilogue` (also into the matmul before them; the default).
+- `--writeback`: `live` (a scratchpad: only data that a later kernel reads is written) or `all` (a
+  write-back cache: every evicted output is written).
+- `--act-dtype`, `--weight-dtype`: the deployed dtypes, when the capture used others (a capture on the
+  `meta` device in fp32). `--weight-dtype GLOB=DTYPE` sets the weights whose name matches, and a number
+  is bits per element (`4.5` for 4-bit weights with a scale and a bias per 64).
+- `--by-module DEPTH`: the traffic of each module at DEPTH.
+
+A gather from a weight (the experts that a router selects) reads only the selected rows, and each at
+most once in a kernel. An update of a state that is a graph input and a graph output (a key-value
+cache) writes only the new values. In Python, `atenviz.traffic.traffic(graph, capacity, ...)` also
+takes a function `(weight name, op) -> dtype`, for a weight that is stored in two dtypes (an FP8 copy
+for one pass and a bf16 copy for another). `atenviz/traffic.py` has all the rules.
+
 ## Module hierarchy
 
 The boxes are module calls from the `nn_module_stack` of `torch.export`. When a model calls a module
