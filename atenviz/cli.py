@@ -5,12 +5,22 @@ import ast
 import importlib
 import importlib.util
 import json
+import math
 import sys
 from pathlib import Path
 
 from .capture import DEFAULT_KEEP_OPS, capture
 from .model_explorer import to_model_explorer
 from .render import render_html
+from .traffic import by_module, load, traffic
+
+
+def parse_size(text: str) -> float:
+    """``0``, ``inf``, a byte count, or a size with a binary unit: ``512K``, ``32M``, ``1G``."""
+    if text == "inf":
+        return math.inf
+    scale = {"K": 2**10, "M": 2**20, "G": 2**30}.get(text[-1:].upper(), 1)
+    return float(text[:-1] if scale > 1 else text) * scale
 
 
 def load_function(spec: str):
@@ -64,7 +74,21 @@ def main(argv: list[str] | None = None) -> None:
                                                       "HALO. Default: no groups.")
     ren.add_argument("--model-explorer", action="store_true",
                      help="Also write OUT.model_explorer.json for the first graph.")
+    tra = sub.add_parser("traffic", help="Print the DRAM traffic and the operational intensity of a graph for "
+                         "each on-chip capacity (atenviz/traffic.py has the rules).")
+    tra.add_argument("graph", type=Path, help="A graph: .json or .json.gz.")
+    tra.add_argument("-c", "--capacity", action="append", type=parse_size, metavar="SIZE",
+                     help="On-chip memory: 0, 512K, 32M, inf. Repeat for more. Default: 0, 32M and inf.")
+    tra.add_argument("--fusion", choices=("none", "vector", "epilogue"), default="epilogue")
+    tra.add_argument("--writeback", choices=("live", "all"), default="live")
+    tra.add_argument("--act-dtype", help="The dtype of the activations, inputs and outputs, for example bf16.")
+    tra.add_argument("--weight-dtype", action="append", metavar="[GLOB=]DTYPE",
+                     help="The dtype of the weights, or of the weights whose name matches GLOB. A number is bits "
+                          "per element (4.5). Repeat for more; the first match wins.")
+    tra.add_argument("--by-module", type=int, metavar="DEPTH", help="Also sum the kernels by module at DEPTH.")
     args = parser.parse_args(argv)
+    if args.cmd == "traffic":
+        return print_traffic(args)
     for option in ("label", "group"):
         if args.cmd == "render" and getattr(args, option) and len(getattr(args, option)) != len(args.graph):
             parser.error(f"give one --{option} for each graph")
@@ -87,3 +111,27 @@ def main(argv: list[str] | None = None) -> None:
     if args.model_explorer:
         out.with_name(out.name + ".model_explorer.json").write_text(json.dumps(to_model_explorer(graphs[0])))
         print(f"wrote {out}.model_explorer.json")
+
+
+def print_traffic(args) -> None:
+    def dtype(text: str):
+        try:
+            return float(text)
+        except ValueError:
+            return text
+
+    weight = None
+    for item in args.weight_dtype or ():
+        glob, _, d = item.rpartition("=")
+        weight = weight or {}
+        weight[glob or "*"] = dtype(d)
+    graph = load(args.graph)
+    for cap in args.capacity or (0, 32 * 2**20, math.inf):
+        r = traffic(graph, cap, args.fusion, args.writeback, args.act_dtype, weight)
+        print(f"capacity {cap:g} B: {r['flops'] / 1e9:.3f} GFLOP, reads {r['reads'] / 1e9:.4f} GB "
+              f"(weights {r['weight_reads'] / 1e9:.4f}), writes {r['writes'] / 1e9:.4f} GB, "
+              f"{r['intensity']:.2f} FLOP/B, {len(r['kernels'])} kernels")
+        if args.by_module is not None:
+            for name, s in sorted(by_module(graph, r, args.by_module).items(), key=lambda x: -x[1]["reads"] - x[1]["writes"]):
+                print(f"  {name:40s} reads {s['reads'] / 1e9:9.4f} GB  writes {s['writes'] / 1e9:9.4f} GB  "
+                      f"{s['flops'] / 1e9:10.3f} GFLOP  {s['kernels']} kernels")
