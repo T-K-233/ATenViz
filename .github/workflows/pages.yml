@@ -36,6 +36,9 @@ jobs:
             halo_generator:HALO:HALO System 1 · motion generator
             halo_tracker_depth:HALO:HALO System 0 · depth tracker
             halo_tracker_proprio:HALO:HALO System 0 · proprio tracker
+            gr00t2_turbo:GR00T:GR00T 2 System 1 · Turbo transformer
+            gr00t2_turbo_vae:GR00T:GR00T 2 System 1 · Turbo VAE encoder
+            gr00t2_sonic:GR00T:GR00T 2 System 0 · SONIC
             smolvla:Other:SmolVLA
         run: |
           raw="https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$GITHUB_SHA/examples/graphs"
