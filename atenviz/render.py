@@ -10,20 +10,25 @@ VIEWER = Path(__file__).parent / "viewer"
 SLOT = '<script id="graph-data" class="graph-data" type="application/gzip-base64"></script>'
 
 
-def render_html(graphs: list[dict], slugs: list[str] | None = None) -> str:
+def render_html(graphs: list[dict], slugs: list[str] | None = None, labels: list[str] | None = None,
+                groups: list[str] | None = None) -> str:
     """Return the viewer page with its stylesheet, its scripts and ``graphs`` in it.
 
-    The page works offline. With more than one graph, the page has a picker, and ``slugs`` name the
-    graphs in the page address (``#pi0``). With no graph, the page asks for a graph file.
+    The page works offline. With more than one graph, the page has a menu, and ``slugs`` name the
+    graphs in the page address (``#pi0``). ``labels`` are the menu items (default: the model names
+    without their parenthesized part), and ``groups`` group the items (for example by work). With no
+    graph, the page asks for a graph file.
     """
     slugs = slugs or [f"graph{i + 1}" for i in range(len(graphs))]
+    labels = labels or [g["model"]["name"].split(" (")[0] for g in graphs]
+    groups = groups or [""] * len(graphs)
     # The graph JSON is gzip-compressed and base64-encoded: a large model gives tens of MB of JSON, and
     # base64 has no "<" that can end the script element.
     data = "\n".join(
         f'<script class="graph-data" type="application/gzip-base64" data-slug="{html.escape(slug)}" '
-        f'data-label="{html.escape(g["model"]["name"].split(" (")[0])}">'
+        f'data-label="{html.escape(label)}" data-group="{html.escape(group)}">'
         f'{base64.b64encode(gzip.compress(json.dumps(g, separators=(",", ":")).encode(), 6)).decode()}</script>'
-        for g, slug in zip(graphs, slugs))
+        for g, slug, label, group in zip(graphs, slugs, labels, groups, strict=True))
     page = (VIEWER / "index.html").read_text()
     for tag, inline in [
         ('<link rel="stylesheet" href="viewer.css">', f"<style>\n{(VIEWER / 'viewer.css').read_text()}</style>"),

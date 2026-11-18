@@ -3,7 +3,7 @@
 ATenViz (A Tensor graph Visualizer) captures a PyTorch model as a hierarchical ATen graph, counts
 its FLOPs and its weight traffic, and shows the graph in the browser.
 
-**[Open the viewer](https://t-k-233.github.io/ATenViz/)** with the graphs of SmolVLA, π0, π0.5 and the
+**[Open the viewer](https://t-k-233.github.io/ATenViz/)** with the graphs of π0, π0.5, SmolVLA and the
 three models of [HALO](https://github.com/apple-aiml-research/ml-halo).
 
 - **The graph.** `atenviz.capture` runs `torch.export` once and lowers the result to Core ATen.
@@ -79,8 +79,9 @@ bf16 and fp16 attention to fp32. As a result, the dtypes of a decomposed attenti
 hardware.
 
 `atenviz render GRAPH.json [GRAPH.json ...] -o PAGE.html` writes the viewer page for graph
-files. With more than one graph, the page has a picker, and the page address selects a graph
-(`PAGE.html#pi0`). The viewer also opens a graph file (`.json` or `.json.gz`) from its Open file
+files. With more than one graph, the page has a menu, and the page address selects a graph
+(`PAGE.html#pi0`). `--label` sets the menu item and `--group` the menu group of each graph, in graph
+order. The viewer also opens a graph file (`.json` or `.json.gz`) from its Open file
 button, or from a file that you drop on it.
 
 From Python:
@@ -105,14 +106,15 @@ export yourself, and `to_model_explorer` converts a graph for Model Explorer.
 directly.
 
 The workflow `.github/workflows/pages.yml` deploys the viewer to GitHub Pages on each push to `main`.
-The page has a picker for the example graphs. It loads each graph from raw.githubusercontent.com at
+The page has a menu of the example graphs, grouped by work. It loads each graph from raw.githubusercontent.com at
 the commit of the deployment. To enable the site, set Settings > Pages > Source to GitHub Actions.
 
 To add or update an example graph:
 
 1. Capture the model with `-o out/SLUG`.
 2. Run `gzip -9n -c out/SLUG.json > examples/graphs/SLUG.json.gz`. With `-n`, the same graph gives the same file.
-3. For a new graph, add a `SLUG:LABEL` line to `EXAMPLES` in `.github/workflows/pages.yml`.
+3. For a new graph, add a `SLUG:GROUP:LABEL` line to `EXAMPLES` in `.github/workflows/pages.yml`, for
+   example `halo_generator:HALO:HALO System 1 · motion generator`.
 
 Do not store the graphs with Git LFS. raw.githubusercontent.com sends the LFS pointer file, not the
 graph.

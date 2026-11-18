@@ -27,21 +27,22 @@ jobs:
       - uses: actions/checkout@v7
       - name: Build the site
         env:
-          # One SLUG:LABEL line for each file examples/graphs/SLUG.json.gz, in picker order.
+          # One SLUG:GROUP:LABEL line for each file examples/graphs/SLUG.json.gz, in menu order. The menu
+          # groups the graphs by work; System 0, 1 and 2 are the levels of a robot stack.
           EXAMPLES: |
-            smolvla:SmolVLA
-            pi0:π0
-            pi05:π0.5
-            halo_generator:HALO generator
-            halo_orchestrator:HALO orchestrator
-            halo_tracker_depth:HALO depth tracker
-            halo_tracker_proprio:HALO proprio tracker
+            pi0:π:π0
+            pi05:π:π0.5
+            halo_orchestrator:HALO:HALO System 2 · orchestrator
+            halo_generator:HALO:HALO System 1 · motion generator
+            halo_tracker_depth:HALO:HALO System 0 · depth tracker
+            halo_tracker_proprio:HALO:HALO System 0 · proprio tracker
+            smolvla:Other:SmolVLA
         run: |
           raw="https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$GITHUB_SHA/examples/graphs"
           links=""
-          while IFS=: read -r slug label; do
+          while IFS=: read -r slug group label; do
             test -f "examples/graphs/$slug.json.gz"
-            links+="<script class=\"graph-data\" data-slug=\"$slug\" data-label=\"$label\" data-src=\"$raw/$slug.json.gz\"></script>"
+            links+="<script class=\"graph-data\" data-slug=\"$slug\" data-group=\"$group\" data-label=\"$label\" data-src=\"$raw/$slug.json.gz\"></script>"
           done <<< "${EXAMPLES%$'\n'}"
           mkdir _site
           cp -r atenviz/viewer/. _site/
