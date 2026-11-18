@@ -3,8 +3,9 @@
 ATenViz (A Tensor graph Visualizer) captures a PyTorch model as a hierarchical ATen graph, counts
 its FLOPs and its weight traffic, and shows the graph in the browser.
 
-**[Open the viewer](https://t-k-233.github.io/ATenViz/)** with the graphs of SmolVLA, π0, π0.5 and the
-three models of [HALO](https://github.com/apple-aiml-research/ml-halo).
+**[Open the viewer](https://t-k-233.github.io/ATenViz/)** with the graphs of π0, π0.5, SmolVLA, the
+three models of [HALO](https://github.com/apple-aiml-research/ml-halo) and the GR00T 2 stack (Turbo and
+SONIC).
 
 - **The graph.** `atenviz.capture` runs `torch.export` once and lowers the result to Core ATen.
   The export traces with FakeTensors, so a model on the `meta` device works and no op runs. The
@@ -51,6 +52,7 @@ atenviz capture examples/llama.py:build -o out/tiny_llama
 | `examples/resnet.py:build` | torchvision ResNet-18. |
 | `examples/lerobot_policy.py:build` | A LeRobot policy, for example SmolVLA, pi0 or pi0.5. See the file for the LeRobot install. |
 | `examples/halo.py:build_generator`, `build_tracker`, `build_orchestrator` | The three models of [HALO](https://github.com/apple-aiml-research/ml-halo): the motion generator, the tracking policy and the planner. See the file for the commands. |
+| `examples/gr00t2.py:build_turbo`, `build_turbo_vae`, `build_sonic` | The GR00T 2 stack: Turbo's transformer and VAE encoder (System 1) and SONIC (System 0). The models are a reconstruction from NVIDIA's whitepaper: see the file. |
 
 The LeRobot policies capture one chunk of 50 actions with 10 flow-matching steps. This is 24,000 to
 29,000 ops, and each capture takes 70 to 90 s:
@@ -79,8 +81,9 @@ bf16 and fp16 attention to fp32. As a result, the dtypes of a decomposed attenti
 hardware.
 
 `atenviz render GRAPH.json [GRAPH.json ...] -o PAGE.html` writes the viewer page for graph
-files. With more than one graph, the page has a picker, and the page address selects a graph
-(`PAGE.html#pi0`). The viewer also opens a graph file (`.json` or `.json.gz`) from its Open file
+files. With more than one graph, the page has a menu, and the page address selects a graph
+(`PAGE.html#pi0`). `--label` sets the menu item and `--group` the menu group of each graph, in graph
+order. The viewer also opens a graph file (`.json` or `.json.gz`) from its Open file
 button, or from a file that you drop on it.
 
 From Python:
@@ -101,18 +104,20 @@ export yourself, and `to_model_explorer` converts a graph for Model Explorer.
 
 `examples/graphs/` has the graphs of SmolVLA, π0 and π0.5 from the LeRobot commands above (LeRobot
 0.6.1, torch 2.15), and the graphs of HALO from the commands in `examples/halo.py` (transformers
-5.22, ml-halo at commit 35d8334). Each file is gzip-compressed JSON. The viewer opens the file
+5.22, ml-halo at commit 35d8334), and the graphs of GR00T 2 from the commands in `examples/gr00t2.py`.
+Each file is gzip-compressed JSON. The viewer opens the file
 directly.
 
 The workflow `.github/workflows/pages.yml` deploys the viewer to GitHub Pages on each push to `main`.
-The page has a picker for the example graphs. It loads each graph from raw.githubusercontent.com at
+The page has a menu of the example graphs, grouped by work. It loads each graph from raw.githubusercontent.com at
 the commit of the deployment. To enable the site, set Settings > Pages > Source to GitHub Actions.
 
 To add or update an example graph:
 
 1. Capture the model with `-o out/SLUG`.
 2. Run `gzip -9n -c out/SLUG.json > examples/graphs/SLUG.json.gz`. With `-n`, the same graph gives the same file.
-3. For a new graph, add a `SLUG:LABEL` line to `EXAMPLES` in `.github/workflows/pages.yml`.
+3. For a new graph, add a `SLUG:GROUP:LABEL` line to `EXAMPLES` in `.github/workflows/pages.yml`, for
+   example `halo_generator:HALO:HALO System 1 · motion generator`.
 
 Do not store the graphs with Git LFS. raw.githubusercontent.com sends the LFS pointer file, not the
 graph.

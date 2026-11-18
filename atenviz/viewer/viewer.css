@@ -14,9 +14,7 @@
   --chart-2: #d9622b;
   --bar-mono-dim: #d1d1d6;
   --wire-muted: #8e8e93;
-  --segment-selected: #ffffff;
   --shadow-tile: 0 2px 12px rgba(0, 0, 0, 0.06);
-  --shadow-control: 0 1px 3px rgba(0, 0, 0, 0.12);
 
   --font-text: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
   --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;
@@ -31,8 +29,8 @@
     --surface: #000000; --surface-alt: #1c1c1e; --surface-elevated: #2c2c2e; --fill: #3a3a3c;
     --ink: #ffffff; --ink-secondary: rgba(235, 235, 245, 0.6); --line: #3a3a3c; --line-strong: #8e8e93;
     --accent-hover: #d1d1d6; --chart-1: #4a8bd0; --chart-2: #d46a38;
-    --bar-mono-dim: #3a3a3c; --segment-selected: #636366;
-    --shadow-tile: none; --shadow-control: none;
+    --bar-mono-dim: #3a3a3c;
+    --shadow-tile: none;
     color-scheme: dark;
   }
 }
@@ -40,8 +38,8 @@
   --surface: #000000; --surface-alt: #1c1c1e; --surface-elevated: #2c2c2e; --fill: #3a3a3c;
   --ink: #ffffff; --ink-secondary: rgba(235, 235, 245, 0.6); --line: #3a3a3c; --line-strong: #8e8e93;
   --accent-hover: #d1d1d6; --chart-1: #4a8bd0; --chart-2: #d46a38;
-  --bar-mono-dim: #3a3a3c; --segment-selected: #636366;
-  --shadow-tile: none; --shadow-control: none;
+  --bar-mono-dim: #3a3a3c;
+  --shadow-tile: none;
   color-scheme: dark;
 }
 
@@ -87,14 +85,12 @@ button, .button {
 button:hover, .button:hover { background: var(--line); }
 button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
 button[aria-pressed="true"]:hover { background: var(--accent-hover); }
-/* SegmentedControl: a fill track with a raised thumb on the selected segment. */
-.seg {
-  display: inline-flex; align-items: center; height: var(--control-sm); padding: 2px;
-  border-radius: var(--radius-pill); background: var(--fill);
+/* Example menu: a pill like the buttons. */
+#examples {
+  height: var(--control-sm); max-width: 100%; padding: 0 var(--space-4); border: 0; border-radius: var(--radius-pill);
+  background: var(--fill); color: var(--ink); font: inherit; cursor: pointer;
 }
-.seg button { height: 28px; padding: 0 var(--space-4); background: transparent; }
-.seg button:hover { background: transparent; color: var(--accent-hover); }
-.seg button[aria-checked="true"] { background: var(--segment-selected); color: var(--ink); box-shadow: var(--shadow-control); }
+#examples:hover { background: var(--line); }
 
 main { flex: 1; display: flex; min-height: 0; }
 

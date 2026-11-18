@@ -55,12 +55,19 @@ def main(argv: list[str] | None = None) -> None:
     cap.add_argument("--decompose-all", action="store_true", help="Decompose all ops to Core ATen.")
     cap.add_argument("--model-explorer", action="store_true", help="Also write OUT.model_explorer.json.")
     ren = sub.add_parser("render", help="Write the viewer page for graph files. With more than one graph, the "
-                                         "page has a picker.")
+                                         "page has a menu.")
     ren.add_argument("graph", type=Path, nargs="+")
     ren.add_argument("-o", "--out", type=Path, help="Output page. Default: the first graph path with .html.")
+    ren.add_argument("--label", action="append", help="Menu item of each graph, in graph order. Default: the "
+                                                      "model name without its parenthesized part.")
+    ren.add_argument("--group", action="append", help="Menu group of each graph, in graph order, for example "
+                                                      "HALO. Default: no groups.")
     ren.add_argument("--model-explorer", action="store_true",
                      help="Also write OUT.model_explorer.json for the first graph.")
     args = parser.parse_args(argv)
+    for option in ("label", "group"):
+        if args.cmd == "render" and getattr(args, option) and len(getattr(args, option)) != len(args.graph):
+            parser.error(f"give one --{option} for each graph")
 
     if args.cmd == "capture":
         model, model_args, *model_kwargs = load_function(args.spec)(**dict(map(parse_arg, args.arg)))
@@ -70,12 +77,12 @@ def main(argv: list[str] | None = None) -> None:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.with_name(out.name + ".json").write_text(json.dumps(graphs[0]))
         print(f"wrote {out}.json  ({len(graphs[0]['ops'])} ops, {len(graphs[0]['modules'])} modules)")
-        slugs = None
+        slugs = labels = groups = None
     else:
         graphs = [json.loads(p.read_text()) for p in args.graph]
         out = (args.out or args.graph[0]).with_suffix("")
-        slugs = [p.stem for p in args.graph]
-    out.with_name(out.name + ".html").write_text(render_html(graphs, slugs))
+        slugs, labels, groups = [p.stem for p in args.graph], args.label, args.group
+    out.with_name(out.name + ".html").write_text(render_html(graphs, slugs, labels, groups))
     print(f"wrote {out}.html")
     if args.model_explorer:
         out.with_name(out.name + ".model_explorer.json").write_text(json.dumps(to_model_explorer(graphs[0])))

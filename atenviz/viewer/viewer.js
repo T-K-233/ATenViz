@@ -1120,7 +1120,7 @@
 
   async function loadFile(file) {
     wanted = file;
-    for (const b of $("examples").querySelectorAll("button")) b.setAttribute("aria-checked", "false");
+    $("examples").selectedIndex = -1;
     try {
       const graph = await readGraph(file);
       if (wanted === file) await load(graph);
@@ -1158,7 +1158,8 @@
   elk = new ELK();
   // Each <script class="graph-data"> element is one graph: gzip-compressed JSON in base64 (see
   // render.py), or the URL of a graph file in data-src (the GitHub Pages site). With more than one
-  // graph, a picker selects the graph, and the page address (#slug) keeps the choice.
+  // graph, a menu selects the graph, and the page address (#slug) keeps the choice. The menu groups
+  // the graphs by their data-group (the work, for example HALO), in the order of the elements.
   const examples = [...document.querySelectorAll("script.graph-data")].filter((el) => el.dataset.src || el.textContent.trim());
   const blobs = new Map();
   async function readExample(el) {
@@ -1169,7 +1170,7 @@
   }
   async function showExample() {
     const el = (wanted = examples.find((e) => "#" + e.dataset.slug === location.hash) || examples[0]);
-    for (const b of $("examples").querySelectorAll("button")) b.setAttribute("aria-checked", String(b.dataset.slug === el.dataset.slug));
+    $("examples").value = el.dataset.slug;
     status("Reading the graph…");
     await new Promise((r) => setTimeout(r));
     try {
@@ -1182,14 +1183,17 @@
     }
   }
   if (examples.length > 1) {
-    $("examples").innerHTML = examples.map((el) => `<button role="radio" aria-checked="false" data-slug="${esc(el.dataset.slug)}">${esc(el.dataset.label)}</button>`).join("");
+    const groups = new Map();
+    for (const el of examples) {
+      const g = el.dataset.group || "";
+      groups.set(g, (groups.get(g) || "") + `<option value="${esc(el.dataset.slug)}">${esc(el.dataset.label)}</option>`);
+    }
+    $("examples").innerHTML = [...groups].map(([g, options]) => g ? `<optgroup label="${esc(g)}">${options}</optgroup>` : options).join("");
     $("examples").hidden = false;
-    $("examples").addEventListener("click", (e) => {
-      const b = e.target.closest("button");
-      if (!b || b.getAttribute("aria-checked") === "true") return;
+    $("examples").addEventListener("change", (e) => {
       // After Open file, the page address can name the example that the reader selects.
-      if ("#" + b.dataset.slug === location.hash) showExample();
-      else location.hash = b.dataset.slug;
+      if ("#" + e.target.value === location.hash) showExample();
+      else location.hash = e.target.value;
     });
     window.addEventListener("hashchange", showExample);
   }

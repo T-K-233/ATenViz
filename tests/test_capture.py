@@ -290,11 +290,12 @@ def test_meta_device_model():
 def test_render_html_embeds_graph_safely(graph):
     g = json.loads(json.dumps(graph))
     g["model"]["name"] = "</script><b>x"
-    html = render_html([g, graph], ["a", "b"])
+    html = render_html([g, graph], ["a", "b"], groups=["<HALO>", "Other"])
     assert "</script><b>" not in html
-    blobs = re.findall(r'type="application/gzip-base64" data-slug="(\w+)" data-label="[^"]*">([^<]*)</script>', html)
-    assert [slug for slug, _ in blobs] == ["a", "b"]
-    assert json.loads(gzip.decompress(base64.b64decode(blobs[0][1])))["model"]["name"] == "</script><b>x"
+    blobs = re.findall(r'type="application/gzip-base64" data-slug="(\w+)" data-label="[^"]*" '
+                       r'data-group="([^"]*)">([^<]*)</script>', html)
+    assert [(slug, group) for slug, group, _ in blobs] == [("a", "&lt;HALO&gt;"), ("b", "Other")]
+    assert json.loads(gzip.decompress(base64.b64decode(blobs[0][2])))["model"]["name"] == "</script><b>x"
 
 
 def test_model_explorer_graph_is_consistent(graph):
