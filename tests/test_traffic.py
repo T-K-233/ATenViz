@@ -74,6 +74,34 @@ def test_state_update_writes_only_the_new_values():
     assert r["reads"] == 8 * 4 + 64 * 4 + 101 * 8 * 4  # x, the weight, the cache with its new row
 
 
+class Caches(nn.Module):  # two layers' caches in one tensor, as a decode step returns them
+    def __init__(self, d=8):
+        super().__init__()
+        self.k = nn.ModuleList([nn.Linear(d, d, bias=False) for _ in range(2)])
+
+    def forward(self, x, caches):
+        new = [torch.cat([caches[i], self.k[i](x)], 1) for i in range(2)]
+        return sum(x @ c.transpose(1, 2) for c in new), torch.stack(new)
+
+
+def test_stacked_state_updates_write_only_the_new_values():
+    g = capture(Caches().eval(), (torch.randn(1, 1, 8), torch.randn(2, 1, 100, 8)))
+    r = traffic(g, math.inf)
+    assert r["writes"] == 1 * 101 * 4 + 2 * 8 * 4
+
+
+class Gqa(nn.Module):
+    def forward(self, q, k, v):  # two key-value heads repeated for eight query heads, as transformers does
+        k, v = (x[:, :, None].expand(1, 2, 4, 64, 16).reshape(1, 8, 64, 16) for x in (k, v))
+        return torch.nn.functional.scaled_dot_product_attention(q, k, v)
+
+
+def test_repeated_heads_are_read_once():
+    g = capture(Gqa(), (torch.randn(1, 8, 64, 16), torch.randn(1, 2, 64, 16), torch.randn(1, 2, 64, 16)))
+    r = traffic(g, 0)
+    assert r["reads"] == (8 + 2 + 2) * 64 * 16 * 4 and len(r["kernels"]) == 1
+
+
 class Experts(nn.Module):
     def __init__(self, e=16, d=8):
         super().__init__()
