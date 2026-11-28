@@ -4,8 +4,8 @@ ATenViz (A Tensor graph Visualizer) captures a PyTorch model as a hierarchical A
 its FLOPs and its weight traffic, and shows the graph in the browser.
 
 **[Open the viewer](https://t-k-233.github.io/ATenViz/)** with the graphs of π0, π0.5, SmolVLA, the
-three models of [HALO](https://github.com/apple-aiml-research/ml-halo) and the GR00T 2 stack (Turbo and
-SONIC).
+three models of [HALO](https://github.com/apple-aiml-research/ml-halo) and the
+[GR00T 2](https://research.nvidia.com/labs/gear/gr00t-2/) stack (Turbo, the YAM model and SONIC).
 
 - **The graph.** `atenviz.capture` runs `torch.export` once and lowers the result to Core ATen.
   The export traces with FakeTensors, so a model on the `meta` device works and no op runs. The
@@ -52,7 +52,7 @@ atenviz capture examples/llama.py:build -o out/tiny_llama
 | `examples/resnet.py:build` | torchvision ResNet-18. |
 | `examples/lerobot_policy.py:build` | A LeRobot policy, for example SmolVLA, pi0 or pi0.5. See the file for the LeRobot install. |
 | `examples/halo.py:build_generator`, `build_tracker`, `build_orchestrator` | The three models of [HALO](https://github.com/apple-aiml-research/ml-halo): the motion generator, the tracking policy and the planner. See the file for the commands. |
-| `examples/gr00t2.py:build_turbo`, `build_turbo_vae`, `build_sonic` | The GR00T 2 stack: Turbo's transformer and VAE encoder (System 1) and SONIC (System 0). The models are a reconstruction from NVIDIA's whitepaper: see the file. |
+| `examples/gr00t2.py:build`, `build_sonic` | The GR00T 2 stack. `build` is one served request of System 1 from NVIDIA's code in Isaac-GR00T: the Wan VAE, then 2 joint video-action steps and 2 cached action steps of the DiT. The variants are `turbo_g1` (GR00T 2 Turbo on the G1) and `core_yam` (GR00T 2 on YAM). `build_sonic` is SONIC (System 0), a reconstruction from SONIC's release. See the file for the commands. |
 
 The LeRobot policies capture one chunk of 50 actions with 10 flow-matching steps. This is 24,000 to
 29,000 ops, and each capture takes 70 to 90 s:
@@ -103,9 +103,9 @@ export yourself, and `to_model_explorer` converts a graph for Model Explorer.
 ## Example graphs
 
 `examples/graphs/` has the graphs of SmolVLA, π0 and π0.5 from the LeRobot commands above (LeRobot
-0.6.1, torch 2.15), and the graphs of HALO from the commands in `examples/halo.py` (transformers
-5.22, ml-halo at commit 35d8334), and the graphs of GR00T 2 from the commands in `examples/gr00t2.py`.
-Each file is gzip-compressed JSON. The viewer opens the file
+0.6.1, torch 2.15), the graphs of HALO from the commands in `examples/halo.py` (transformers 5.22,
+ml-halo at commit 35d8334), and the graphs of GR00T 2 from the commands in `examples/gr00t2.py`
+(Isaac-GR00T at commit 7e492ad). Each file is gzip-compressed JSON. The viewer opens the file
 directly.
 
 The workflow `.github/workflows/pages.yml` deploys the viewer to GitHub Pages on each push to `main`.
